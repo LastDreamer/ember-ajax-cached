@@ -1,3 +1,30 @@
+// import Ember from 'ember';
+// import AjaxService from 'ember-ajax/services/ajax';
+// import LocalStorageBackend from '../backends/local-storage';
+
+// const {
+//   RSVP: { Promise }
+// } = Ember;
+
+// export default AjaxService.extend({
+//   init() {
+//     this.cache = new LocalStorageBackend();
+//   },
+
+//   request(url, options) {
+//     let inCacheValue = this.cache.get(url);
+//     if (inCacheValue != null) {
+//       return new Promise(resolve => resolve);
+//     }
+
+//     return this._super(url, options)
+//       .then(result => {
+//         this.cache.set(url, JSON.stringify(result));
+//         return result;
+//       });
+//   }
+// });
+
 import Ember from 'ember';
 import AjaxService from 'ember-ajax/services/ajax';
 
@@ -11,24 +38,25 @@ let ajaxCachedClass = new Object({
   one: false
 });
 
+//export default Ember.Service.extend({
 export default AjaxService.extend({
-  _getLocalStorage: function() {
-    let localStorage = false;
+  //sessionCache: Ember.Object.create(),
 
+  _getLS: function() {
+    let LS = false;
     if(window && 'localStorage' in window) {
       try {
-        localStorage = window.localStorage;
-      } catch(e) {
+        LS = window.localStorage;
+      } catch(ex) {
         console.log('localStorage is undefined');
-        localStorage = false;
+        LS = false;
       }
     }
-
-    return localStorage;
+    return LS;
   },
 
   _fromLSCache: function( pUrl ) {
-    let LS = this.get('_getLocalStorage');
+    let LS = this._getLS();
     if(LS) {
       let st = LS.getItem(pUrl);
       let item = null;
@@ -52,20 +80,22 @@ export default AjaxService.extend({
   },
 
   _toLSCache: function( pUrl, pValue, pLive, pOne ) {
-    let LS = this.get('_getLocalStorage');
+    let LS = this._getLS();
     if(LS && pLive && pLive>0 && pValue) {
-      let el = Ember.copy(ajaxCachedClass);
+      //let el = Ember.$.extend(true, {}, ajaxCachedClass);
+      let el = Ember.copy(ajaxCachedClass);//JSON.parse(JSON.stringify(ajaxCachedClass));
       let liveDate = new Date();
       el.dieTime = liveDate.setTime( liveDate.getTime() + pLive );
       el.value = pValue;
       el.one = pOne ? true : false;
       LS.setItem(pUrl, '@::' + JSON.stringify(el));
+      //console.log(pUrl);
     }
     return false;
   },
 
   _clearLSDie: function() {
-    let LS = this.get('_getLocalStorage');
+    let LS = this._getLS();
     if( LS ) {
       for (var i = 0; i < LS.length; i++) {
         var st = LS.getItem( LS.key(i) );
@@ -74,7 +104,7 @@ export default AjaxService.extend({
           var pb = st.indexOf(':',p),
               pe = st.indexOf(',',pb);
           var dt = new Date(parseInt(st.slice(pb+1, pe).trim()));
-
+          //console.log(pb, pe, st.slice(pb+1, pe), dt, st);
           if( !this._isAlive(dt) ) {
             LS.removeItem( LS.key(i) );
           }
@@ -104,7 +134,8 @@ export default AjaxService.extend({
       }
     }
     if( pCache && 'reload' in pCache && pCache['reload'] || !PResult ) {
-      let PReload = this._super(pUrl,
+      let PReload = //this.get('ajax').request
+        this._super(pUrl,
           {
             method: pMethod,
             data: pData
