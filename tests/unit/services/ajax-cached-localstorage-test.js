@@ -10,36 +10,54 @@ moduleFor('service:ajax-cached-localstorage', 'Unit | Service | ajax cached loca
   // needs: ['service:foo']
 });
 
-test('it makes requests', function(assert) {
+test('should make requests', function(assert) {
   let service = this.subject();
 
   return service.request('/api/foo')
     .then(r => {
-      console.log(r);
       assert.ok(r.result === 'bar');
     });
 });
 
-test('it caches request data with path only', function(assert) {
+test('should cache request data with path only', function(assert) {
   let service = this.subject(),
-    first,
-    second;
+      first,
+      second;
 
-  first = service.request('/api/now', { live: 100000 })
-    .then(result => {
-      console.log(result);
-      return result.now;
-    });
-
-  second = service.request('/api/now', { live: 100000 })
+  first = service.request('/api/now', { lifetime: 100000 })
       .then(result => {
-        console.log(result);
         return result.now;
       });
 
+  second = service.request('/api/now', { lifetime: 100000 })
+    .then(result => {
+      return result.now;
+    });
+
   Promise.all([first, second])
     .then(params => {
-      console.log(params[0] === params[1]);
-      assert(params[0] === params[1]);
+      assert.ok(params[0] === params[1]);
     });
+});
+
+test('should invalidate cache after lifetime ends', function(assert) {
+  let service = this.subject(),
+      first,
+      second;
+
+  first = service.request('/api/now', { lifetime: 1 })
+    .then(result => {
+      return result.now;
+    });
+
+  second = service.request('/api/now', { lifetime: 100000 })
+    .then(result => {
+      return result.now;
+    });
+
+  Promise.all([first, second])
+    .then(params => {
+      assert.ok(params[0] !== params[1]);
+    });
+
 });
