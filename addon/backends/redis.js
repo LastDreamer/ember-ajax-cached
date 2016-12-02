@@ -30,7 +30,17 @@ export default class Cache {
     }
   }
 
-  clearExpired() {
-    return;
+  /**
+   * @param  {string}
+   * @return {string}
+   */
+  remove(name) {
+    if (this.backend) {
+      this.backend.del(name);
+
+      return true;
+    }
+
+    return null;
   }
 }

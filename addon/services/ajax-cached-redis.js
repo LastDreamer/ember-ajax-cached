@@ -1,20 +1,22 @@
 /*globals FastBoot:true*/
 import Ember from 'ember';
+import AjaxCachedService from './ajax-cached';
+import LocalStorageBackend from '../backends/redis';
 
-export default Ember.Service.extend({
-	init() {
-		let fastboot = this.get('fastboot');
-		if (!fastboot) { return; }
+export default AjaxCachedService.extend({
+  init() {
+    let fastboot = this.get('fastboot');
+    if (!fastboot) { return; }
 
-		let redis = FastBoot.require('redis'),
-			redisClient = redis.createClient();
+    let redis = FastBoot.require('redis'),
+      redisClient = redis.createClient();
 
-		redisClient.set('myvar', 'abrakadabra', redis.print);
-	},
+    this.cache = new LocalStorageBackend(redisClient);
+  },
 
-	fastboot: Ember.computed(function() {
-		let owner = Ember.getOwner(this);
+  fastboot: Ember.computed(function() {
+    let owner = Ember.getOwner(this);
 
-		return owner.lookup('service:fastboot');
-	})
+    return owner.lookup('service:fastboot');
+  })
 });
