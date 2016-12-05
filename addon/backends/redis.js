@@ -1,3 +1,9 @@
+import Ember from 'ember';
+
+const {
+  RSVP: { Promise }
+} = Ember;
+
 export default class Cache {
   /**
    * @param  {redisClient object}
@@ -12,7 +18,9 @@ export default class Cache {
    * @param {string}
    */
   set(name, value) {
+    console.log('try push to redis');
     if (this.backend) {
+      console.log('pushed to redis');
       this.backend.set(name, value);
     }
   }
@@ -22,12 +30,18 @@ export default class Cache {
    * @return {string}
    */
   get(name) {
-    if (this.backend) {
-      return this.backend.getAsync(name)
-        .then(result => {
-          return result;
+    return new Promise((resolve, reject) => {
+      if (this.backend) {
+        this.backend.get(name, function(err, res) {
+          if (res) {
+            console.log('result finded');
+            resolve(res);
+          } else {
+            reject();
+          }
         });
-    }
+      }
+    });
   }
 
   /**

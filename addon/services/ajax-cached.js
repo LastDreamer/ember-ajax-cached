@@ -1,9 +1,8 @@
+/*globals FastBoot:true*/
 import Ember from 'ember';
-import AjaxService from 'ember-ajax/services/ajax';
-
-const {
-  RSVP: { Promise }
-} = Ember;
+import LocalStorageCacheBackend from '../backends/local-storage';
+import RedisCacheBackend from '../backends/redis';
+import fetch from 'ember-network/fetch';
 
 let ajaxCachedClass = new Object({
   dieTime: null,
@@ -11,29 +10,50 @@ let ajaxCachedClass = new Object({
   one: false
 });
 
-export default AjaxService.extend({
-  _fromCache: function( url ) {
-    let cacheBackend = this.get('cache');
-    if(cacheBackend) {
-      let cachedString = cacheBackend.get(url);
-      let item = null;
-      if(cachedString && cachedString.slice(0,3) === '@::') {
-        item = JSON.parse(cachedString.slice(3));
-        if( item && typeof(item)==='object' && 'dieTime' in item ) {
-          let isLeave = this._isAlive(item.dieTime);
-          if( !isLeave ) {
-            item = null;
-          }
-          if( !isLeave || item.one ) {
-            cacheBackend.remove(url);
-          }
-        } else {
-          cacheBackend.remove(url);
-        }
-      }
-      return item && 'value' in item ? item.value : null;
+export default Ember.Service.extend({
+  fastboot: Ember.computed(function() {
+    let owner = Ember.getOwner(this);
+
+    return owner.lookup('service:fastboot');
+  }),
+
+  init() {
+    try {
+      let redis = FastBoot.require('redis');
+      this.set('cache', new RedisCacheBackend(redis.createClient()));
+    } catch(e) {
+      this.set('cache', new LocalStorageCacheBackend());
     }
-    return null;
+  },
+
+  _fromCache: function( url ) {
+    return this.get('cache').get(url)
+      .then(cachedString => {
+        let item = null;
+
+        if(cachedString && cachedString.slice(0,3) === '@::') {
+          item = JSON.parse(cachedString.slice(3));
+          if( item && typeof(item)==='object' && 'dieTime' in item ) {
+            let isLeave = this._isAlive(item.dieTime);
+            if( !isLeave ) {
+              item = null;
+            }
+            if( !isLeave || item.one ) {
+              this.get('cache').remove(url);
+            }
+          } else {
+            this.get('cache').remove(url);
+          }
+        }
+
+        if (item && 'value' in item) {
+          return item.value;
+        } else {
+          return new Ember.RSVP.Promise((resolve, reject) => {
+            reject();
+          });
+        }
+      });
   },
 
   _toCache: function( url, value, live, one ) {
@@ -75,36 +95,38 @@ export default AjaxService.extend({
     return dTime && (dTime instanceof Date) && dTime > new Date();
   },
 
-  request: function( pUrl, pCache, pMethod, pData ) {
+  requestCached: function( url, cache, pMethod, pData ) {
     pMethod = pMethod || 'GET';
     pData = pData || null;
-    let PResult = null,
-        cacheKey = pUrl + (pMethod||'') + (pData?JSON.stringify(pData):'');
-    if( pCache ) {
-      // this._clearDies();
-      let R = this._fromCache(cacheKey, pCache);
-      if( R ) {
-        PResult = new Promise(isOk=>isOk(R))
-          .then(result=>{
-            return result;
-          });
-      }
-    }
-    if( pCache && 'reload' in pCache && pCache['reload'] || !PResult ) {
-      let PReload = this._super(pUrl,
-          {
+
+    let cacheKey = url.trim()/* + pMethod + ((pData && JSON.stringify(pData))||'')*/;
+
+    if( cache ) {
+      return this._fromCache(cacheKey)
+        .catch(() => {
+          return fetch(url, {
             method: pMethod,
             data: pData
           })
-        .then(result=>{
-          let live = pCache && 'live' in pCache ? pCache['live'] : 0;
-          let one = pCache && 'one' in pCache ? pCache['one'] : false;
-          this._toCache(cacheKey, result, live, one);
+          .then(res => {
+            return res.json();
+          });
+        })
+        .then(result => {
+          if (cache.live) {
+            this._toCache(cacheKey, result, cache.live, cache.one || false);
+          }
+
           return result;
         });
-      PResult = PResult ? PResult : PReload;
+    } else {
+      return fetch(url, {
+        method: pMethod,
+        data: pData
+      })
+      .then(res => {
+        return res.json();
+      });
     }
-
-    return PResult;
   }
 });

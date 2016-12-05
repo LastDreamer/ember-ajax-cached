@@ -1,3 +1,10 @@
+import Ember from 'ember';
+
+const {
+  RSVP: { Promise }
+} = Ember;
+
+
 export default class Cache {
   constructor() {
     let backend = false;
@@ -27,14 +34,18 @@ export default class Cache {
    * @return {string}
    */
   get(name) {
-    if (this.backend) {
-      let resultString = this.backend.getItem(name),
-          result = JSON.parse(resultString);
-
-      return result;
-    }
-
-    return null;
+    return new Promise((resolve, reject) => {
+      if(this.backend){
+        let item = this.backend.getItem(name);
+        if ( item ) {
+          resolve(item);
+        } else {
+          reject(null);
+        }
+      } else {
+        return reject("localStorage not found");
+      }
+    });
   }
 
   /**
